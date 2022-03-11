@@ -1,0 +1,133 @@
+ Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Text("Client Signature"),
+                    GestureDetector(
+                      onPanDown: (details) {
+                        setState(() {
+                          _addPoints(details.globalPosition);
+                        });
+                      },
+                      onPanUpdate: (details) {
+                        setState(() {
+                          _addPoints(details.globalPosition);
+                        });
+                      },
+                      onPanEnd: (details) {
+                        setState(() {
+                          _addPoints(null);
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Container(
+                          width: sigBoxSize,
+                          height: sigBoxSize,
+                          key: _sigKey,
+                          child: FittedBox(
+                            child: SizedBox(
+                              height: sigBoxSize,
+                              width: sigBoxSize,
+                              child: CustomPaint(
+                                painter: SignaturePainter(_points),
+                                child: Container(
+                                  padding: EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: ui.Color.fromARGB(255, 19, 1, 1),
+                                        width: 2,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10)),
+                                  height: sigBoxSize,
+                                  width: sigBoxSize,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                
+
+
+                *******************************************************
+                void _addPoints(Offset? globalPosition) {
+    Offset? offset;
+    if (globalPosition != null) {
+      final RenderBox renderBox =
+          _sigKey.currentContext?.findRenderObject() as RenderBox;
+      offset = renderBox.globalToLocal(globalPosition);
+    }
+
+    _points.add(offset);
+  }
+
+  void clearPoints() {
+    setState(() {
+      _points.clear();
+    });
+  }
+
+  Future<String?> getImageString(BuildContext context) async {
+    ui.PictureRecorder recorder = ui.PictureRecorder();
+    Canvas canvas = Canvas(recorder);
+    var dpr = ui.window.devicePixelRatio;
+    canvas.scale(dpr, dpr);
+    SignaturePainter painter = SignaturePainter(_points);
+    var size = context.size;
+    painter.paint(canvas, size!);
+    ui.Image image = await recorder
+        .endRecording()
+        .toImage((size.width * dpr).ceil(), (size.height * dpr).ceil());
+
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    final time = DateTime.now().toIso8601String().replaceAll(".", ':');
+    final name = 'sign_$time.png';
+
+    await ImageGallerySaver.saveImage(byteData!.buffer.asUint8List(),
+        name: name);
+
+    //Uint8List? pngUint8List = byteData?.buffer.asUint8List();
+
+    Uint8List? pngUint8List = Uint8List.view(byteData.buffer);
+
+    String byteString = base64.encode(pngUint8List);
+
+    return byteString;
+  }
+*************************************************************
+class SignaturePainter extends CustomPainter {
+  final List<Offset?> offsets;
+  SignaturePainter(this.offsets);
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    Rect rect = Offset.zero & size;
+    canvas.clipRect(rect);
+    final paint = Paint()
+      ..color = colorSignatureStroke
+      ..strokeWidth = 3;
+
+    for (var i = 0; i < offsets.length; i++) {
+      if (shouldDrawLine(i)) {
+        canvas.drawLine(offsets[i]!, offsets[i + 1]!, paint);
+      } else if (shouldDrawPoint(i)) {
+        canvas.drawPoints(PointMode.points, [offsets[i]!], paint);
+      }
+    }
+    canvas.restore();
+  }
+
+  bool shouldDrawPoint(int i) =>
+      offsets[i] != null && offsets.length > i + 1 && offsets[i + 1] == null;
+
+  bool shouldDrawLine(int i) =>
+      offsets[i] != null && offsets.length > i + 1 && offsets[i + 1] != null;
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return true;
+  }
+}
